@@ -1,9 +1,8 @@
-# Copyright (c) 2006-2020 - R.W. van 't Veer
+# Copyright (c) 2006, 2007, 2008, 2009, 2010, 2011 - R.W. van 't Veer
 
 require 'exifr'
-require 'exifr/tiff'
 require 'stringio'
-require 'delegate'
+require 'open-uri'
 
 module EXIFR
   # = JPEG decoder
@@ -31,7 +30,15 @@ module EXIFR
     # +file+ is a filename or an IO object.  Hint: use StringIO when working with slurped data like blobs.
     def initialize(file)
       if file.kind_of? String
-        File.open(file, 'rb') { |io| examine(io) }
+        if file =~ URI::regexp
+          begin
+            open(file) { |io| examine(io)}
+          rescue
+            raise BadURL
+          end
+        else
+          File.open(file, 'rb') { |io| examine(io) }
+        end
       else
         examine(file.dup)
       end
@@ -58,47 +65,40 @@ module EXIFR
     # +method+ does exist for EXIF data +nil+ will be returned.
     def method_missing(method, *args)
       super unless args.empty?
-      super unless methods.include?(method)
+      super unless methods.include?(method.to_s)
       @exif.send method if defined?(@exif) && @exif
     end
 
-    def respond_to?(method, include_all = false) # :nodoc:
-      super || methods.include?(method) || (include_all && private_methods.include?(method))
+    def respond_to?(method) # :nodoc:
+      super || methods.include?(method.to_s)
     end
 
-    def methods(regular=true) # :nodoc:
-      if regular
-        super + TIFF::TAGS << :gps
-      else
-        super
-      end
+    def methods # :nodoc:
+      super + TIFF::TAGS << "gps"
     end
 
     class << self
       alias instance_methods_without_jpeg_extras instance_methods
       def instance_methods(include_super = true) # :nodoc:
-        instance_methods_without_jpeg_extras(include_super) + TIFF::TAGS << :gps
+        instance_methods_without_jpeg_extras(include_super) + TIFF::TAGS << "gps"
       end
     end
 
   private
-
-    class Reader < SimpleDelegator
-      def readbyte; readchar; end unless File.method_defined?(:readbyte)
-      def readint; (readbyte << 8) + readbyte; end
-      def readframe; read(readint - 2); end
-      def readsof; [readint, readbyte, readint, readint, readbyte]; end
-      def next
-        c = readbyte while c != 0xFF
-        c = readbyte while c == 0xFF
-        c
-      end
-    end
-
     def examine(io)
-      io = Reader.new(io)
+      class << io
+        def readbyte; readchar; end unless method_defined?(:readbyte)
+        def readint; (readbyte << 8) + readbyte; end
+        def readframe; read(readint - 2); end
+        def readsof; [readint, readbyte, readint, readint, readbyte]; end
+        def next
+          c = readbyte while c != 0xFF
+          c = readbyte while c == 0xFF
+          c
+        end
+      end unless io.respond_to? :readsof
 
-      unless io.getbyte == 0xFF && io.getbyte == 0xD8 # SOI
+      unless io.readbyte == 0xFF && io.readbyte == 0xD8 # SOI
         raise MalformedJPEG, "no start of image marker found"
       end
 
