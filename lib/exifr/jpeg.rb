@@ -32,7 +32,7 @@ module EXIFR
       if file.kind_of? String
         if file =~ URI::regexp
           begin
-            open(file) { |io| examine(io)}
+            URI.open(file) { |io| examine(io)}
           rescue
             raise BadURL
           end
