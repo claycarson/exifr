@@ -1,3 +1,5 @@
+This fork adds the ability to references lens_make and lens_model. It also adds the ability to get exif from a URL in addition to a file referenced [here](https://github.com/remvee/exifr/pull/30).
+
 = EXIF Reader
 {<img src="https://badge.fury.io/rb/exifr.svg" alt="Gem Version" />}[https://badge.fury.io/rb/exifr]
 
